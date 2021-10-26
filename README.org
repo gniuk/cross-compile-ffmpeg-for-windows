@@ -1,0 +1,100 @@
+* Cross Compile FFmpeg for Windows
+
+  
+** Host Environment
+
+   - Windows10
+   - Cygwin-x86_64 with mingw64-x86_64-gcc-g++ compiler suits
+
+** Requirements
+
+   - x264 (e.g. x264-master.tar.bz2)
+   - x265 (e.g. x265-v3.4.tar.gz)
+   - SDL2 (e.g. SDL2-devel-2.0.16-mingw.tar.gz)
+   - fdk-aac (install mingw64-x86_64-fdk-aac with cygwin-x86_64 setup)
+
+** Cross Compile x264
+
+#+begin_src
+     ./configure --prefix=/usr/local --host=mingw32 --cross-prefix=x86_64-w64-mingw32- --enable-shared \
+                 --disable-win32thread --disable-asm --enable-pic
+     make
+     make install
+#+end_src
+
+** Cross Compile x265
+
+#+begin_src
+     cd x265/build/msys
+     cp make-x86_64-w64-mingw32-Makefiles.sh my-make-x86_64-w64-mingw32-Makefiles.sh
+     sed -i 's/MSYS/Unix/' my-make-x86_64-w64-mingw32-Makefiles.sh
+     bash ./my-make-x86_64-w64-mingw32-Makefiles.sh
+     make install
+#+end_src
+
+** Install SDL2
+#+begin_src
+    tar -xf SDL2-devel-2.0.16-mingw.tar.gz
+    mkdir -p /opt/local
+    cp -r SDL2-2.0.16/x86_64-w64-mingw32 /opt/local/
+#+end_src
+
+** Cross Compile FFmpeg
+
+#+begin_src
+    export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/opt/local/x86_64-w64-mingw32/lib/pkgconfig
+    vim configure
+    sdl2-config -> the absolute path of sdl2-config, e.g. /opt/local/x86_64-w64-mingw32/bin/sdl2-config
+    # SDL2_CONFIG="${cross_prefix}sdl2-config"
+    SDL2_CONFIG="/opt/local/x86_64-w64-mingw32/bin/sdl2-config"
+    ./configure --enable-cross-compile --cross-prefix=x86_64-w64-mingw32- --prefix=/usr/local --arch=x86_64 \
+                --target-os=mingw32 --enable-libx264 --enable-libx265 --disable-w32threads --disable-os2threads \
+                --disable-doc --extra-ldflags="-L/usr/local/lib -L/opt/local/x86_64-w64-mingw32/lib" \
+                --extra-cflags="-I/usr/local/include -I/opt/local/x86_64-w64-mingw32/include" --enable-pthreads \
+                --enable-shared --enable-sdl --enable-libfdk-aac --enable-nonfree --enable-gpl --enable-version3
+
+    make
+    make install
+#+end_src
+
+If errors in make, and it's about windres, try the following:
+
+#+begin_src
+    x86_64-w64-mingw32-windres -I. libavcodec/avcodecres.rc libavcodec/avcodecres.o
+    x86_64-w64-mingw32-windres -I. libavdevice/avdeviceres.rc libavdevice/avdeviceres.o
+    x86_64-w64-mingw32-windres -I. libavfilter/avfilterres.rc libavfilter/avfilterres.o
+    x86_64-w64-mingw32-windres -I. libavformat/avformatres.rc libavformat/avformatres.o
+    x86_64-w64-mingw32-windres -I. libavresample/avresampleres.rc libavresample/avresampleres.o
+    x86_64-w64-mingw32-windres -I. libavutil/avutilres.rc libavutil/avutilres.o
+    x86_64-w64-mingw32-windres -I. libpostproc/postprocres.rc libpostproc/postprocres.o
+    x86_64-w64-mingw32-windres -I. libswresample/swresampleres.rc libswresample/swresampleres.o
+    x86_64-w64-mingw32-windres -I. libswscale/swscaleres.rc libswscale/swscaleres.o
+#+end_src
+
+If some other requirements not met, check the components in cygwin setup and install them, mingw64-x86_64- prefix first.
+
+** Make ffmpeg portable
+
+#+begin_src
+    mkdir ffmpeg-portable
+    cd ffmpeg-portable
+    cp /usr/local/bin/*.dll ./
+    cp /usr/local/bin/{ffmpeg.exe,ffplay.exe,ffprobe.exe} ./
+    cp /opt/local/x86_64-w64-mingw32/bin/SDL2.dll ./
+    cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libbz2-1.dll ./
+    cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libfdk-aac-1.dll ./
+    cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libgcc_s_seh-1.dll ./
+    cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libstdc++-6.dll ./
+    cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/libwinpthread-1.dll ./
+    cp /usr/x86_64-w64-mingw32/sys-root/mingw/bin/zlib1.dll ./
+
+    zip -r -9 ffmpeg-portable.zip ffmpeg-portable
+#+end_src
+
+** Use it
+#+begin_src
+    cd ffmpeg-portable
+    ./ffmpeg -i xxx
+    ./ffplay -i xxx
+    ./ffprobe -i xxx
+#+end_src
